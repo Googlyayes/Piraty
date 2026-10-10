@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 120" role="img" aria-label="Walt Disney Pictures">
+  <rect width="300" height="120" rx="12" fill="#f1f1f1"/>
+  <path d="M100 42 Q150 12 200 42" fill="none" stroke="#3b3b3b" stroke-width="3" stroke-linecap="round"/>
+  <text x="150" y="62" text-anchor="middle" fill="#222" font-family="Arial, Helvetica, sans-serif" font-size="34" font-style="italic" font-weight="700">Walt Disney</text>
+  <text x="150" y="86" text-anchor="middle" fill="#222" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="600" letter-spacing="4">PICTURES</text>
+</svg>

@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 120" role="img" aria-label="Marvel Studios">
+  <rect width="300" height="120" rx="12" fill="#f1f1f1"/>
+  <rect x="20" y="34" width="90" height="34" rx="2" fill="#ed1d24"/>
+  <text x="65" y="58" text-anchor="middle" fill="#fff" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="900">MARVEL</text>
+  <text x="189" y="58" text-anchor="middle" fill="#222" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="700" letter-spacing="1">STUDIOS</text>
+</svg>

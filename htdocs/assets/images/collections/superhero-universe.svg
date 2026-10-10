@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 180" role="img" aria-label="Superhero Universe Collection">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#111827"/>
+      <stop offset=".42" stop-color="#dc2626"/>
+      <stop offset="1" stop-color="#2563eb"/>
+    </linearGradient>
+    <linearGradient id="shade" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#000" stop-opacity=".76"/>
+      <stop offset=".55" stop-color="#000" stop-opacity=".12"/>
+      <stop offset="1" stop-color="#fff" stop-opacity=".08"/>
+    </linearGradient>
+  </defs>
+  <rect width="420" height="180" rx="22" fill="url(#bg)"/>
+  <path d="M300 25 L326 56 L366 52 L340 82 L350 122 L316 100 L280 122 L292 82 L264 52 L304 56 Z" fill="#facc15" opacity=".23"/>
+  <path d="M-20 82 L420 18" stroke="#fff" stroke-width="10" opacity=".1"/>
+  <path d="M-10 120 L430 52" stroke="#facc15" stroke-width="4" opacity=".18"/>
+  <path d="M60 28 L98 88 L30 88 Z" fill="#60a5fa" opacity=".18"/>
+  <circle cx="218" cy="52" r="28" fill="#fff" opacity=".09"/>
+  <rect width="420" height="180" rx="22" fill="url(#shade)"/>
+  
+</svg>

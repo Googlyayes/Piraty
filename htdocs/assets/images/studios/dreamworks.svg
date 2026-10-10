@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 120" role="img" aria-label="DreamWorks">
+  <rect width="300" height="120" rx="12" fill="#f1f1f1"/>
+  <circle cx="66" cy="44" r="30" fill="#234b94"/>
+  <path d="M66 23c-8 7-10 18-8 28 8-5 14-11 16-20 0-3-3-6-8-8z" fill="#fff"/>
+  <text x="150" y="68" text-anchor="middle" fill="#234b94" font-family="Arial, Helvetica, sans-serif" font-size="30" font-weight="700">DreamWorks</text>
+</svg>

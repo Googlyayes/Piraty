@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 120" role="img" aria-label="Pixar">
+  <rect width="300" height="120" rx="12" fill="#f1f1f1"/>
+  <text x="150" y="67" text-anchor="middle" fill="#222" font-family="Arial, Helvetica, sans-serif" font-size="40" font-weight="700" letter-spacing="4">PIXAR</text>
+  <circle cx="52" cy="52" r="9" fill="#222"/>
+</svg>
