@@ -1870,9 +1870,29 @@ function removeHistory(id) {
 
 function removeContinueWatching(itemOrId) {
   const item = typeof itemOrId === 'object' ? itemOrId : findItem(itemOrId);
-  const key = item ? mediaKeyForItem(item, item.selectedSeason || item.season || 1, item.selectedEpisode || item.episode || 1) : String(itemOrId || '');
-  const localContinue = getLocalContinueItems().filter(entry => mediaKeyForItem(entry, entry.selectedSeason || entry.season || 1, entry.selectedEpisode || entry.episode || 1) !== key && entry.id !== String(itemOrId));
+  const targetId = String(itemOrId || (item ? item.id : ''));
+  const targetKey = item ? getMediaIdentityKey(item) : '';
+  const targetTitle = String(item?.title || '').trim().toLowerCase();
+
+  const localContinue = getLocalContinueItems().filter(entry => {
+    if (String(entry.id) === targetId) return false;
+    if (targetKey && getMediaIdentityKey(entry) === targetKey) return false;
+    if (targetTitle && String(entry.title || '').trim().toLowerCase() === targetTitle) return false;
+    return true;
+  });
   writeStore(CONTINUE_KEY, localContinue);
+
+  // Also clean history of this item so fallback doesn't resurrect it
+  try {
+    const cleanHist = getHistory().filter(entry => {
+      const eId = typeof entry === 'object' ? String(entry.id || '') : String(entry);
+      if (eId === targetId) return false;
+      if (targetTitle && typeof entry === 'object' && String(entry.title || '').trim().toLowerCase() === targetTitle) return false;
+      return true;
+    });
+    writeStore(HISTORY_KEY, cleanHist);
+  } catch (e) {}
+
   if (getLocalUser() && item) removeLocalLibraryItem('continueWatching', item).catch(error => console.warn('Continue watching remove sync failed:', error));
   loadPage(page);
   toast('Removed from continue watching');
@@ -2521,15 +2541,25 @@ function getLocalContinueItems() {
   return readStore(CONTINUE_KEY).map(entryToItem).filter(Boolean);
 }
 
+function getMediaIdentityKey(item) {
+  if (!item) return '';
+  const clean = cleanItem(item) || item;
+  const externalId = clean.tmdbId || clean.anilistId || clean.malId;
+  const type = normalizeMediaTypeForKey(clean) || clean.mediaType || clean.type || 'media';
+  if (externalId) return `${type}_${externalId}`;
+  if (clean.id && !String(clean.id).startsWith('local-')) return String(clean.id);
+  const normalizedTitle = String(clean.title || clean.name || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, ' ');
+  if (normalizedTitle) return `${type}_${normalizedTitle}`;
+  return String(clean.id || '');
+}
+
 function dedupeContinueWatchingItems(items = []) {
   const seen = new Set();
   const deduped = [];
 
   for (const item of items) {
     if (!item) continue;
-    const identity = mediaKeyForItem(item, item.selectedSeason || item.season || 1, item.selectedEpisode || item.episode || 1)
-      || String(item.id || '')
-      || String(item.title || '');
+    const identity = getMediaIdentityKey(item);
 
     if (!identity || seen.has(identity)) continue;
     seen.add(identity);
@@ -2558,7 +2588,7 @@ function sortContinueWatchingItems(items = []) {
 function getContinueWatchingItems() {
   if (getLocalUser() && LIBRARY_STATE.loaded) return sortContinueWatchingItems(LIBRARY_STATE.continueWatching.map(itemFromLibraryDoc).filter(Boolean));
   const localContinue = getLocalContinueItems();
-  return localContinue.length ? sortContinueWatchingItems(localContinue) : getHistoryItems();
+  return localContinue.length ? sortContinueWatchingItems(localContinue) : dedupeContinueWatchingItems(getHistoryItems());
 }
 
 async function libraryCollectionDocs(kind) {
@@ -2668,8 +2698,8 @@ function saveLocalContinueWatching(item, options = {}) {
     selectedEpisode: options.episode || item?.selectedEpisode || item?.episode || 1
   });
   if (!clean) return;
-  const key = mediaKeyForItem(clean, clean.selectedSeason || 1, clean.selectedEpisode || 1);
-  const list = getLocalContinueItems().filter(entry => mediaKeyForItem(entry, entry.selectedSeason || entry.season || 1, entry.selectedEpisode || entry.episode || 1) !== key);
+  const showIdentity = getMediaIdentityKey(clean);
+  const list = getLocalContinueItems().filter(entry => getMediaIdentityKey(entry) !== showIdentity);
   writeStore(CONTINUE_KEY, [clean, ...list].slice(0, 40));
 }
 
@@ -6347,6 +6377,15 @@ function initCards(scope = document) {
       e.stopPropagation();
 
       removeHistory(btn.dataset.removeHistory);
+    };
+  });
+
+  scope.querySelectorAll('[data-remove-continueWatching]').forEach(btn => {
+    btn.onclick = e => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      removeContinueWatching(btn.dataset.removeContinuewatching || btn.dataset.removeContinueWatching);
     };
   });
 
