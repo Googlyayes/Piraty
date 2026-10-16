@@ -1,0 +1,18 @@
+# PiraTY
+
+PiraTY is an entertainment discovery website for movies, television, anime, manga, music, and sports.
+
+## Key pages
+
+- [Home](https://piraty.in/)
+- [Browse](https://piraty.in/browse/)
+- [Movies](https://piraty.in/movies/)
+- [TV Shows](https://piraty.in/tv-shows/)
+- [Anime](https://piraty.in/anime/)
+- [Manga](https://piraty.in/manga/)
+- [Watchlist](https://piraty.in/watchlist/)
+- [History](https://piraty.in/history/)
+- [About](https://piraty.in/about/)
+- [Contact](https://piraty.in/contact/)
+- [Privacy](https://piraty.in/privacy/)
+- [Terms](https://piraty.in/terms/)

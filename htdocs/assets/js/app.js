@@ -1460,18 +1460,18 @@ function hero(items) {
         <p>${item.category} • ${item.year} • ★ ${item.rating}</p>
         <div class="hero-buttons">
           <button class="btn primary" data-hero-play="${item.id}">${icons.play} Play</button>
-          <button class="btn" data-hero-add-watchlist="${item.id}">${icons.plus}</button>
+          <button class="btn" data-hero-add-watchlist="${item.id}" aria-label="Add ${escapeHtml(item.title)} to Watchlist">${icons.plus}</button>
         </div>
       </div>
     </article>`).join('')}
-    <div class="hero-controls"><button class="round-btn" data-hero-prev>${icons.arrowLeft}</button><button class="round-btn" data-hero-next>${icons.arrowRight}</button></div>
+    <div class="hero-controls"><button class="round-btn" data-hero-prev aria-label="Previous featured title">${icons.arrowLeft}</button><button class="round-btn" data-hero-next aria-label="Next featured title">${icons.arrowRight}</button></div>
   </section>`;
 }
 function row(title, items, removable=false, removeKind='history') {
   if (!items || !items.length) return '';
   const id = 'row-' + Math.random().toString(36).slice(2,9);
   return `<section class="section">
-    <div class="section-head"><h2 class="section-title">${title} ${title==='Collections' ? '<span>Explore All</span>' : ''}</h2><div class="row-controls"><button class="round-btn" data-scroll-left="${id}">${icons.arrowLeft}</button><button class="round-btn" data-scroll-right="${id}">${icons.arrowRight}</button></div></div>
+    <div class="section-head"><h2 class="section-title">${title} ${title==='Collections' ? '<span>Explore All</span>' : ''}</h2><div class="row-controls"><button class="round-btn" data-scroll-left="${id}" aria-label="Scroll ${escapeHtml(title)} left">${icons.arrowLeft}</button><button class="round-btn" data-scroll-right="${id}" aria-label="Scroll ${escapeHtml(title)} right">${icons.arrowRight}</button></div></div>
     <div class="media-row" id="${id}">${items.map(item => card(item, removable, removeKind)).join('')}</div>
   </section>`;
 }
@@ -1490,8 +1490,6 @@ function card(item, removable=false, removeKind='history') {
     data-anilist-id="${item.anilistId || ''}"
     data-mal-id="${item.malId || ''}"
     data-media-type="${item.mediaType || item.type || ''}"
-    tabindex="0"
-    role="button"
     aria-label="View ${escapeHtml(item.title)}">
     <div class="poster-frame">
       <img ${imageAttrs(item.poster, { kind: 'poster', alt: item.title, loading: 'lazy', sizes: '(max-width: 520px) 42vw, (max-width: 760px) 172px, 190px', width: 342, height: 513 })}>
@@ -1509,7 +1507,7 @@ function card(item, removable=false, removeKind='history') {
 }
 function collectionsSection() {
   const id='collections-row';
-  return `<section class="section"><div class="section-head"><h2 class="section-title">Collections <span>Explore All</span></h2><div class="row-controls"><button class="round-btn" data-scroll-left="${id}">${icons.arrowLeft}</button><button class="round-btn" data-scroll-right="${id}">${icons.arrowRight}</button></div></div><div class="collection-row" id="${id}">${DATA.collections.map(renderCollectionCard).join('')}</div></section>`;
+  return `<section class="section"><div class="section-head"><h2 class="section-title">Collections <span>Explore All</span></h2><div class="row-controls"><button class="round-btn" data-scroll-left="${id}" aria-label="Scroll Collections left">${icons.arrowLeft}</button><button class="round-btn" data-scroll-right="${id}" aria-label="Scroll Collections right">${icons.arrowRight}</button></div></div><div class="collection-row" id="${id}">${DATA.collections.map(renderCollectionCard).join('')}</div></section>`;
 }
 
 // ============================================================
@@ -1762,7 +1760,6 @@ function initCards(scope=document) {
   // Card navigation
   scope.querySelectorAll('.poster-card').forEach(card => {
     card.addEventListener('click', handleCardClick);
-    card.addEventListener('keydown', handleCardKeyboard);
   });
   
   scope.querySelectorAll('[data-add-watchlist]').forEach(btn => btn.addEventListener('click', e => {
@@ -1802,27 +1799,6 @@ function handleCardClick(e) {
   saveSelectedItem(item);
   addHistory(item, false);
   window.location.href = path('details/');
-}
-
-function handleCardKeyboard(e) {
-  if (e.key === 'Enter' || e.key === ' ') {
-    e.preventDefault();
-    const card = e.currentTarget;
-    const itemId = card.dataset.cardId;
-    if (!itemId) return;
-    
-    const item = itemFromDataset(card) || findItem(itemId);
-    if (!item) return;
-    
-    if (isUnderDevelopment(item.type)) {
-      showUnderDevModal();
-      return;
-    }
-    
-    saveSelectedItem(item);
-    addHistory(item, false);
-    window.location.href = path('details/');
-  }
 }
 
 function navigateToDetail(itemId) {
@@ -5033,45 +5009,56 @@ async function loadPage(p) {
     initCommunityFeatures(root).catch(err => console.warn('Community widgets failed:', err));
   }
 
-}
-
-async function homePage(useTMDB = true) {
-  const continueItems = getContinueWatchingItems();
-  const personal = personalizedHomeSections();
-
-  if (!useTMDB || !isTMDBConfigured()) {
-    return `
-      ${hero(mixed().slice(0,4))}
-      ${continueItems.length ? row('Continue Watching', continueItems, true, 'continueWatching') : ''}
-      ${personal}
-      ${row('Trending Movies', byType('movie').slice(0,8))}
-      ${row('Trending Shows', byType('show').slice(0,8))}
-      ${row('Trending Anime', byType('anime').slice(0,8))}
-      ${collectionsSection()}
-      ${row('Recently Added', DATA.items.slice().reverse().slice(0,12))}
-    `;
+  if (p === 'home') {
+    hydrateHomePage(root);
   }
 
-  const [heroHtml, movies, shows, animeRow, recent, recommended] = await Promise.all([
-    tmdbHero('/trending/all/week?language=en-US', null, mixed().slice(0,4)),
-    tmdbRow('Trending Movies', '/trending/movie/week?language=en-US', 'movie', byType('movie').slice(0,8), 12),
-    tmdbRow('Trending Shows', '/trending/tv/week?language=en-US', 'tv', byType('show').slice(0,8), 12),
-    tmdbAnimeRow('Trending Anime', '/discover/tv?language=en-US&with_genres=16&with_original_language=ja&sort_by=popularity.desc&page=1', byType('anime').slice(0,8), 12),
-    tmdbRow('Recently Added', '/movie/now_playing?language=en-US&page=1', 'movie', DATA.items.slice().reverse().slice(0,12), 12),
-    tmdbRow('Recommended', '/movie/popular?language=en-US&page=1', 'movie', DATA.items.slice(0,12), 12)
-  ]);
+}
+
+function homePage(useTMDB = true) {
+  const continueItems = getContinueWatchingItems();
+  const personal = personalizedHomeSections();
+  const homeSlot = (key, content) => useTMDB && isTMDBConfigured()
+    ? `<div class="home-slot" data-home-slot="${key}">${content}</div>`
+    : content;
 
   return `
-    ${heroHtml}
+    ${homeSlot('hero', hero(mixed().slice(0,4)))}
     ${continueItems.length ? row('Continue Watching', continueItems, true, 'continueWatching') : ''}
     ${personal}
-    ${movies}
-    ${shows}
-    ${animeRow}
+    ${homeSlot('movies', row('Trending Movies', byType('movie').slice(0,8)))}
+    ${homeSlot('shows', row('Trending Shows', byType('show').slice(0,8)))}
+    ${homeSlot('anime', row('Trending Anime', byType('anime').slice(0,8)))}
     ${collectionsSection()}
-    ${recent}
-    ${recommended}
+    ${homeSlot('recent', row('Recently Added', DATA.items.slice().reverse().slice(0,12)))}
+    ${homeSlot('recommended', row('Recommended', DATA.items.slice(0,12)))}
   `;
+}
+
+function hydrateHomePage(root) {
+  if (!isTMDBConfigured()) return;
+
+  const sections = [
+    ['hero', () => tmdbHero('/trending/all/week?language=en-US', null, mixed().slice(0,4))],
+    ['movies', () => tmdbRow('Trending Movies', '/trending/movie/week?language=en-US', 'movie', byType('movie').slice(0,8), 12)],
+    ['shows', () => tmdbRow('Trending Shows', '/trending/tv/week?language=en-US', 'tv', byType('show').slice(0,8), 12)],
+    ['anime', () => tmdbAnimeRow('Trending Anime', '/discover/tv?language=en-US&with_genres=16&with_original_language=ja&sort_by=popularity.desc&page=1', byType('anime').slice(0,8), 12)],
+    ['recent', () => tmdbRow('Recently Added', '/movie/now_playing?language=en-US&page=1', 'movie', DATA.items.slice().reverse().slice(0,12), 12)],
+    ['recommended', () => tmdbRow('Recommended', '/movie/popular?language=en-US&page=1', 'movie', DATA.items.slice(0,12), 12)]
+  ];
+
+  sections.forEach(([key, loadSection]) => {
+    loadSection().then(html => {
+      const slot = root.querySelector(`[data-home-slot="${key}"]`);
+      if (!slot || !html || slot.innerHTML === html) return;
+
+      slot.innerHTML = html;
+      if (key === 'hero') initHero(slot);
+      initCards(slot);
+      initTop10Switchers(slot);
+      initRowButtons();
+    }).catch(error => console.warn(`Failed to hydrate home ${key} section:`, error));
+  });
 }
 
 async function browsePage() {
@@ -5326,7 +5313,7 @@ async function initProfileStatsPage(scope = document) {
   const joined = profile?.createdAt?.toDate ? profile.createdAt.toDate().toLocaleDateString() : 'Recently';
   const profileName = profile?.username || currentUsername(user);
   if (avatarEl) {
-    avatarEl.innerHTML = profile?.photoURL ? `<img src="${escapeHtml(profile.photoURL)}" alt="">` : escapeHtml(profileName.slice(0, 1).toUpperCase());
+    avatarEl.innerHTML = profile?.photoURL ? `<img src="${escapeHtml(profile.photoURL)}" alt="" width="54" height="54" decoding="async">` : escapeHtml(profileName.slice(0, 1).toUpperCase());
   }
   if (nameEl) nameEl.textContent = profileName;
   if (metaEl) metaEl.textContent = `Joined ${joined}`;
@@ -5596,7 +5583,7 @@ function renderComments(comments = [], mediaKey = '') {
     const username = displayUsername(reply.uid) || reply.username || 'PiraTY User';
     const avatar = displayAvatar(reply.uid) || reply.avatar || '';
     return `<article class="comment-card reply-card" data-reply-id="${escapeHtml(reply.id)}" data-reply-owner="${escapeHtml(reply.uid || '')}" data-parent-comment="${escapeHtml(comment.id)}">
-      <div class="comment-avatar">${avatar ? `<img src="${escapeHtml(avatar)}" alt="">` : escapeHtml(String(username || 'P').slice(0, 1).toUpperCase())}</div>
+      <div class="comment-avatar">${avatar ? `<img src="${escapeHtml(avatar)}" alt="" width="42" height="42" loading="lazy" decoding="async">` : escapeHtml(String(username || 'P').slice(0, 1).toUpperCase())}</div>
       <div class="comment-body">
         <div class="comment-meta">
           <strong>${escapeHtml(username)}</strong>
@@ -5624,7 +5611,7 @@ function renderComments(comments = [], mediaKey = '') {
     const username = displayUsername(comment.uid) || comment.username || 'PiraTY User';
     const avatar = displayAvatar(comment.uid) || comment.avatar || '';
     return `<article class="comment-card" data-comment-id="${escapeHtml(comment.id)}" data-comment-owner="${escapeHtml(comment.uid || '')}">
-    <div class="comment-avatar">${avatar ? `<img src="${escapeHtml(avatar)}" alt="">` : escapeHtml(String(username || 'P').slice(0, 1).toUpperCase())}</div>
+    <div class="comment-avatar">${avatar ? `<img src="${escapeHtml(avatar)}" alt="" width="42" height="42" loading="lazy" decoding="async">` : escapeHtml(String(username || 'P').slice(0, 1).toUpperCase())}</div>
     <div class="comment-body">
       <div class="comment-meta">
         <strong>${escapeHtml(username)}</strong>
@@ -6132,17 +6119,17 @@ function hero(items) {
       <img ${imageAttrs(item.backdrop, { kind: 'hero', alt: item.title, loading: i === 0 ? 'eager' : 'lazy', fetchpriority: i === 0 ? 'high' : 'low', sizes: '(max-width: 760px) 100vw, calc(100vw - var(--sidebar-w))', width: 1280, height: 720 })}>
       <div class="hero-content">
         <div class="hero-title-wrap" data-hero-title-wrap>
-          <img class="hero-logo-title" data-hero-logo-title alt="${escapeHtml(item.title)}" hidden>
+          <img class="hero-logo-title" data-hero-logo-title alt="${escapeHtml(item.title)}" width="360" height="140" hidden>
           <h1 class="hero-title-fallback" data-hero-title-fallback>${escapeHtml(item.title)}</h1>
         </div>
         <p>${escapeHtml(item.category || item.type || 'Media')} • ${escapeHtml(item.year)} • ★ ${escapeHtml(item.rating)}</p>
         <div class="hero-buttons">
           <button class="btn primary" data-hero-play="${escapeHtml(item.id)}">${icons.play} Play</button>
-          <button class="btn" data-hero-add-watchlist="${escapeHtml(item.id)}">${icons.plus}</button>
+          <button class="btn" data-hero-add-watchlist="${escapeHtml(item.id)}" aria-label="Add ${escapeHtml(item.title)} to Watchlist">${icons.plus}</button>
         </div>
       </div>
     </article>`).join('')}
-    <div class="hero-controls"><button class="round-btn" data-hero-prev>${icons.arrowLeft}</button><button class="round-btn" data-hero-next>${icons.arrowRight}</button></div>
+    <div class="hero-controls"><button class="round-btn" data-hero-prev aria-label="Previous featured title">${icons.arrowLeft}</button><button class="round-btn" data-hero-next aria-label="Next featured title">${icons.arrowRight}</button></div>
   </section>`;
 }
 
@@ -6151,7 +6138,7 @@ function row(title, items, removable = false, removeKind = 'history') {
   if (!cleanItems.length) return '';
   const id = 'row-' + Math.random().toString(36).slice(2,9);
   return `<section class="section">
-    <div class="section-head"><h2 class="section-title">${escapeHtml(title)} ${title==='Collections' ? '<span>Explore All</span>' : ''}</h2><div class="row-controls"><button class="round-btn" data-scroll-left="${id}">${icons.arrowLeft}</button><button class="round-btn" data-scroll-right="${id}">${icons.arrowRight}</button></div></div>
+    <div class="section-head"><h2 class="section-title">${escapeHtml(title)} ${title==='Collections' ? '<span>Explore All</span>' : ''}</h2><div class="row-controls"><button class="round-btn" data-scroll-left="${id}" aria-label="Scroll ${escapeHtml(title)} left">${icons.arrowLeft}</button><button class="round-btn" data-scroll-right="${id}" aria-label="Scroll ${escapeHtml(title)} right">${icons.arrowRight}</button></div></div>
     <div class="media-row" id="${id}">${cleanItems.map(item => card(item, removable, removeKind)).join('')}</div>
   </section>`;
 }
@@ -6177,7 +6164,7 @@ function top10Section(title, periods) {
         <div class="top10-periods" role="group" aria-label="${escapeHtml(title)} timeframe">
           ${availablePeriods.map(([key]) => `<button class="top10-period-btn ${key === initialPeriod ? 'active' : ''}" type="button" data-top10-period="${key}" aria-pressed="${key === initialPeriod}">${labels[key] || escapeHtml(key)}</button>`).join('')}
         </div>
-        <div class="row-controls"><button class="round-btn" data-scroll-left="${id}">${icons.arrowLeft}</button><button class="round-btn" data-scroll-right="${id}">${icons.arrowRight}</button></div>
+        <div class="row-controls"><button class="round-btn" data-scroll-left="${id}" aria-label="Scroll ${escapeHtml(title)} left">${icons.arrowLeft}</button><button class="round-btn" data-scroll-right="${id}" aria-label="Scroll ${escapeHtml(title)} right">${icons.arrowRight}</button></div>
       </div>
     </div>
     <div class="media-row" id="${id}" data-top10-row>${periodData[initialPeriod].map(item => card(item)).join('')}</div>
@@ -6228,8 +6215,6 @@ function card(item, removable = false, removeKind = 'history') {
     data-poster="${escapeHtml(item.poster)}"
     data-backdrop="${escapeHtml(item.backdrop)}"
     data-description="${escapeHtml(item.description || '')}"
-    tabindex="0"
-    role="button"
     aria-label="View ${escapeHtml(item.title)}">
     <div class="poster-frame">
       <img ${imageAttrs(item.poster, { kind: 'poster', alt: item.title, loading: 'lazy', sizes: '(max-width: 520px) 42vw, (max-width: 760px) 172px, 190px', width: 342, height: 513 })}>
@@ -6281,6 +6266,14 @@ async function playItem(itemOrId) {
   const episode = item.selectedEpisode || item.episode || item.episodeNumber || 1;
   const title = item.title || item.name || '';
 
+  try {
+    await ensurePlayerAssets();
+  } catch (error) {
+    console.error('Player assets failed to load:', error);
+    toast('The player could not be loaded. Please try again.');
+    return;
+  }
+
   const inlinePlayer = typeof window.openPlayer === 'function' ? window.openPlayer : (typeof openPlayer === 'function' ? openPlayer : null);
   if (inlinePlayer) {
     if (itemType === 'movie') {
@@ -6310,6 +6303,35 @@ async function playItem(itemOrId) {
   openItem(item);
 }
 
+let playerAssetsPromise;
+function ensurePlayerAssets() {
+  if (typeof window.openPlayer === 'function') return Promise.resolve();
+  if (playerAssetsPromise) return playerAssetsPromise;
+
+  playerAssetsPromise = Promise.all([
+    new Promise((resolve, reject) => {
+      const stylesheet = document.createElement('link');
+      stylesheet.rel = 'stylesheet';
+      stylesheet.href = window.PiraTYCache?.withVersion(path('assets/css/player.css')) || path('assets/css/player.css');
+      stylesheet.onload = resolve;
+      stylesheet.onerror = () => reject(new Error(`Failed to load ${stylesheet.href}`));
+      document.head.append(stylesheet);
+    }),
+    new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = window.PiraTYCache?.withVersion(path('assets/js/player.js')) || path('assets/js/player.js');
+      script.onload = resolve;
+      script.onerror = () => reject(new Error(`Failed to load ${script.src}`));
+      document.head.append(script);
+    })
+  ]).catch(error => {
+    playerAssetsPromise = null;
+    throw error;
+  });
+
+  return playerAssetsPromise;
+}
+
 function initCards(scope = document) {
   if (!scope) return;
 
@@ -6317,7 +6339,6 @@ function initCards(scope = document) {
 
   scope.querySelectorAll('.poster-card').forEach(cardEl => {
     cardEl.onclick = handleCardClick;
-    cardEl.onkeydown = handleCardKeyboard;
   });
 
   scope.querySelectorAll('[data-add-watchlist]').forEach(btn => {
@@ -6764,7 +6785,7 @@ function initAuthModal() {
     const resolvedName = profile?.username || user.displayName || user.email?.split('@')[0] || 'PiraTY User';
     const avatar = profile?.photoURL || user.photoURL || '';
     loginBtn.classList.add('account-button');
-    loginBtn.innerHTML = `${avatar ? `<img src="${escapeHtml(avatar)}" alt="">` : `<span class="account-avatar">${escapeHtml(resolvedName.slice(0, 1).toUpperCase())}</span>`}<span>${escapeHtml(resolvedName)}</span>`;
+    loginBtn.innerHTML = `${avatar ? `<img src="${escapeHtml(avatar)}" alt="" width="24" height="24" decoding="async">` : `<span class="account-avatar">${escapeHtml(resolvedName.slice(0, 1).toUpperCase())}</span>`}<span>${escapeHtml(resolvedName)}</span>`;
   }
 
   function updateLoginButton() {
@@ -6843,8 +6864,3 @@ function initAuthModal() {
     });
   }
 }
-
-
-
-
-
