@@ -1,8 +1,8 @@
 (function () {
   // IMPORTANT:
   // Change PIRATY_VERSION on every deploy.
-  // Example: "2026.10.21.004"
-  const PIRATY_VERSION = '2026.10.21.007';
+  // Example: "2026.10.22.008"
+  const PIRATY_VERSION = '2026.10.22.008';
   const VERSION_KEY = 'piraty-release-version';
   const CLEANUP_KEY = 'piraty-cache-cleanup-version';
   const RELOAD_KEY = 'piraty_reloaded_for_version';

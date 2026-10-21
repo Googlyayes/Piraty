@@ -1155,7 +1155,7 @@ body::before {
   position: fixed;
   inset: 0;
   z-index: -3;
-  background: url('../images/background-still.svg?v=2026.10.21.004') center/cover no-repeat;
+  background: url('../images/background-still.svg?v=2026.10.22.008') center/cover no-repeat;
   transform: translate3d(0, 0, 0);
   pointer-events: none;
 }
