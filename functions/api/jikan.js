@@ -37,7 +37,7 @@ export async function onRequest(context) {
     cleanEndpoint = '/' + cleanEndpoint;
   }
 
-  if (!/^\/(anime|top\/anime|seasons\/now)(\?|$)/.test(cleanEndpoint)) {
+  if (!/^\/(anime|top\/anime|seasons\/now|schedules)(\?|$)/.test(cleanEndpoint)) {
     return new Response(JSON.stringify({ error: 'Unsupported Jikan endpoint' }), {
       status: 400,
       headers: { 'Content-Type': 'application/json' },

@@ -4252,8 +4252,9 @@ function animeScheduleCard(item, dateInfo, isMySchedule = false) {
   const status = scheduleStatusLabel(item, dateInfo);
   const statusClass = status.toLowerCase();
   const poster = item.cover;
-  const detailsId = `anilist-anime-${item.mediaId}`;
-  return `<a class="anime-schedule-card" href="${path('details/?id=' + encodeURIComponent(detailsId))}" data-open-schedule-item="${escapeHtml(String(item.mediaId))}" data-open-title="${escapeHtml(item.title)}" data-open-poster="${escapeHtml(poster || '')}" data-open-media-id="${escapeHtml(String(item.mediaId))}">
+  const isJikan = item.source === 'jikan' || String(item.id || '').startsWith('jikan');
+  const detailsId = isJikan ? `jikan-anime-${item.mediaId}` : `anilist-anime-${item.mediaId}`;
+  return `<a class="anime-schedule-card" href="${path('details/?id=' + encodeURIComponent(detailsId))}" data-open-schedule-item="${escapeHtml(String(item.mediaId))}" data-open-title="${escapeHtml(item.title)}" data-open-poster="${escapeHtml(poster || '')}" data-open-media-id="${escapeHtml(String(item.mediaId))}" data-open-source="${isJikan ? 'jikan' : 'anilist'}">
     <span class="anime-schedule-cover">
       ${poster
         ? `<img ${imageAttrs(poster, { kind: 'poster', alt: item.title, loading: 'lazy', sizes: '(max-width: 760px) 84px, 104px', width: 104, height: 156 })}>`
@@ -4306,6 +4307,7 @@ async function loadAnimeScheduleRange(dateInfo) {
     return cached.items;
   }
 
+  // 1. Try AniList Airing Schedule
   try {
     const response = await aniListFetch(ANIME_AIRING_SCHEDULE_QUERY, {
       page: 1,
@@ -4321,7 +4323,48 @@ async function loadAnimeScheduleRange(dateInfo) {
       return items;
     }
   } catch (error) {
-    console.warn('Anime schedule error:', error);
+    console.warn('AniList schedule error:', error);
+  }
+
+  // 2. Try Jikan Airing Schedule Fallback
+  try {
+    const dayName = (dateInfo.label || '').toLowerCase();
+    if (dayName) {
+      const jikanData = await jikanFetch(`/schedules?filter=${encodeURIComponent(dayName)}`);
+      if (Array.isArray(jikanData?.data) && jikanData.data.length) {
+        const scheduleSec = dateInfo.date ? Math.floor(dateInfo.date.getTime() / 1000) + 3600 * 12 : dateInfo.startSec + 3600 * 12;
+        const nowSec = Math.floor(Date.now() / 1000);
+        const items = jikanData.data.slice(0, 30).map(anime => {
+          if (!anime?.mal_id) return null;
+          const title = anime.title_english || anime.title || 'Untitled Anime';
+          const cover = anime.images?.jpg?.large_image_url || anime.images?.jpg?.image_url || '';
+          return {
+            id: `jikan-schedule-${anime.mal_id}`,
+            source: 'jikan',
+            airingAt: scheduleSec,
+            episode: anime.episodes || 1,
+            timeUntilAiring: Math.max(0, scheduleSec - nowSec),
+            mediaId: anime.mal_id,
+            title,
+            cover,
+            status: anime.status || 'Currently Airing',
+            media: {
+              id: anime.mal_id,
+              title: { romaji: anime.title, english: anime.title_english, native: anime.title_japanese },
+              status: anime.status || ''
+            }
+          };
+        }).filter(Boolean);
+
+        if (items.length) {
+          cache[cacheKey] = { savedAt: Date.now(), items };
+          writeAnimeScheduleCache(cache);
+          return items;
+        }
+      }
+    }
+  } catch (jikanErr) {
+    console.warn('Jikan schedule fallback error:', jikanErr);
   }
 
   if (cached && Array.isArray(cached.items) && cached.items.length) {
@@ -4595,9 +4638,10 @@ function buildAnimeScheduleItemFromElement(el) {
   if (!el) return null;
   const mediaId = Number(el.dataset.openMediaId || 0);
   if (!mediaId) return null;
+  const isJikan = el.dataset.openSource === 'jikan';
   return rememberItem({
-    id: `anilist-anime-${mediaId}`,
-    anilistId: mediaId,
+    id: isJikan ? `jikan-anime-${mediaId}` : `anilist-anime-${mediaId}`,
+    ...(isJikan ? { malId: mediaId } : { anilistId: mediaId }),
     title: el.dataset.openTitle || 'Untitled Anime',
     poster: el.dataset.openPoster || '',
     backdrop: el.dataset.openPoster || '',
