@@ -4035,40 +4035,29 @@ function aniListFetch(query, variables = {}) {
   if (ANILIST_REQUEST_CACHE.has(cacheKey)) return ANILIST_REQUEST_CACHE.get(cacheKey);
 
   const request = (async () => {
-    const candidates = [ANILIST_CONFIG.proxyUrl, 'https://graphql.anilist.co'];
     let lastError = null;
 
-    for (const url of candidates) {
-      try {
-        const response = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-          body: JSON.stringify({ query, variables })
-        });
+    try {
+      const response = await fetch(ANILIST_CONFIG.proxyUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ query, variables })
+      });
 
-        if (!response.ok) {
-          lastError = new Error(`AniList ${url} error: ${response.status} ${response.statusText}`);
-          if (response.status === 403 || response.status === 429) {
-            console.warn(`${lastError.message}. Retrying alternate AniList endpoint.`);
-            continue;
-          }
-          return null;
-        }
-
-        const payload = await response.json();
-        if (payload?.errors && Array.isArray(payload.errors) && payload.errors.length) {
-          lastError = new Error(payload.errors.map(error => error?.message || 'AniList error').join('; '));
-          if (url === ANILIST_CONFIG.proxyUrl) {
-            console.warn(`${lastError.message}. Retrying alternate AniList endpoint.`);
-            continue;
-          }
-          return null;
-        }
-
-        return payload;
-      } catch (error) {
-        lastError = error;
+      if (!response.ok) {
+        lastError = new Error(`AniList proxy error: ${response.status} ${response.statusText}`);
+        return null;
       }
+
+      const payload = await response.json();
+      if (payload?.errors && Array.isArray(payload.errors) && payload.errors.length) {
+        lastError = new Error(payload.errors.map(error => error?.message || 'AniList error').join('; '));
+        return null;
+      }
+
+      return payload;
+    } catch (error) {
+      lastError = error;
     }
 
     if (lastError) {
@@ -4317,17 +4306,28 @@ async function loadAnimeScheduleRange(dateInfo) {
     return cached.items;
   }
 
-  const response = await aniListFetch(ANIME_AIRING_SCHEDULE_QUERY, {
-    page: 1,
-    perPage: 100,
-    airingAtGreater: dateInfo.startSec,
-    airingAtLesser: dateInfo.endSec
-  });
-  const rawItems = response?.data?.Page?.airingSchedules || [];
-  const items = rawItems.map(normalizeAiringScheduleEntry).filter(Boolean);
-  cache[cacheKey] = { savedAt: Date.now(), items };
-  writeAnimeScheduleCache(cache);
-  return items;
+  try {
+    const response = await aniListFetch(ANIME_AIRING_SCHEDULE_QUERY, {
+      page: 1,
+      perPage: 100,
+      airingAtGreater: dateInfo.startSec,
+      airingAtLesser: dateInfo.endSec
+    });
+    const rawItems = response?.data?.Page?.airingSchedules || [];
+    const items = rawItems.map(normalizeAiringScheduleEntry).filter(Boolean);
+    if (items.length) {
+      cache[cacheKey] = { savedAt: Date.now(), items };
+      writeAnimeScheduleCache(cache);
+      return items;
+    }
+  } catch (error) {
+    console.warn('Anime schedule error:', error);
+  }
+
+  if (cached && Array.isArray(cached.items) && cached.items.length) {
+    return cached.items;
+  }
+  return [];
 }
 
 function renderAnimeScheduleTabs(dates, activeKey, includeMySchedule) {
@@ -5139,19 +5139,84 @@ async function tvShowsPage() {
   })}${trending}${popular}${topRated}${airing}${onAir}`;
 }
 
-async function animePage() {
-  const currentYear = new Date().getFullYear();
-  const [trendingItems, movieItems, topRatedItems, recentItems] = isTMDBConfigured()
-    ? await Promise.all([
-        aniListAnimeItems('trending', { sort: ['TRENDING_DESC', 'POPULARITY_DESC'] }, 24),
-        aniListAnimeItems('movies', { sort: ['POPULARITY_DESC', 'SCORE_DESC'], format: 'MOVIE' }, 20),
-        aniListAnimeItems('top-rated', { sort: ['SCORE_DESC', 'POPULARITY_DESC'] }, 24),
-        aniListAnimeItems('recent', { sort: ['POPULARITY_DESC', 'TRENDING_DESC'], status: 'RELEASING', seasonYear: currentYear }, 24)
-      ])
-    : [[], [], [], []];
+async function fetchAnimeRowItems(category, limit = 24) {
+  // 1. Try AniList
+  try {
+    const currentYear = new Date().getFullYear();
+    const queryMap = {
+      trending: { cacheKey: 'trending', vars: { sort: ['TRENDING_DESC', 'POPULARITY_DESC'] }, limit: 24 },
+      movies: { cacheKey: 'movies', vars: { sort: ['POPULARITY_DESC', 'SCORE_DESC'], format: 'MOVIE' }, limit: 20 },
+      'top-rated': { cacheKey: 'top-rated', vars: { sort: ['SCORE_DESC', 'POPULARITY_DESC'] }, limit: 24 },
+      recent: { cacheKey: 'recent', vars: { sort: ['POPULARITY_DESC', 'TRENDING_DESC'], status: 'RELEASING', seasonYear: currentYear }, limit: 24 }
+    };
+    const cfg = queryMap[category];
+    if (cfg) {
+      const items = await aniListAnimeItems(cfg.cacheKey, cfg.vars, cfg.limit || limit);
+      if (items && items.length) return items;
+    }
+  } catch (err) {
+    console.warn(`AniList ${category} fetch failed:`, err);
+  }
 
-  const heroItems = trendingItems.filter(item => item.backdrop).slice(0, 5);
+  // 2. Try Jikan (MyAnimeList) Fallback
+  try {
+    const jikanEndpoints = {
+      trending: '/top/anime?filter=bypopularity',
+      movies: '/top/anime?type=movie',
+      'top-rated': '/top/anime',
+      recent: '/seasons/now'
+    };
+    const endpoint = jikanEndpoints[category];
+    if (endpoint) {
+      const jikanItems = await jikanAnimeItems(endpoint, limit);
+      if (jikanItems && jikanItems.length) return jikanItems;
+    }
+  } catch (err) {
+    console.warn(`Jikan ${category} fallback failed:`, err);
+  }
+
+  // 3. Try TMDB Anime Fallback
+  try {
+    if (isTMDBConfigured()) {
+      const isMovie = category === 'movies';
+      const tmdbEndpoints = {
+        trending: '/discover/tv?language=en-US&with_genres=16&with_original_language=ja&sort_by=popularity.desc&page=1',
+        movies: '/discover/movie?language=en-US&with_genres=16&with_original_language=ja&sort_by=popularity.desc&page=1',
+        'top-rated': '/discover/tv?language=en-US&with_genres=16&with_original_language=ja&sort_by=vote_average.desc&vote_count.gte=200&page=1',
+        recent: '/discover/tv?language=en-US&with_genres=16&with_original_language=ja&sort_by=first_air_date.desc&page=1'
+      };
+      const endpoint = tmdbEndpoints[category];
+      if (endpoint) {
+        const raw = await tmdbItems(endpoint, isMovie ? 'movie' : 'tv', limit);
+        const tmdbAnime = raw.map(item => rememberItem({
+          ...item,
+          type: 'anime',
+          mediaType: isMovie ? 'movie' : 'tv',
+          category: 'Anime'
+        })).filter(Boolean);
+        if (tmdbAnime && tmdbAnime.length) return tmdbAnime;
+      }
+    }
+  } catch (err) {
+    console.warn(`TMDB ${category} fallback failed:`, err);
+  }
+
+  // 4. Default Static Fallback
+  return byType('anime');
+}
+
+async function animePage() {
+  const [trendingItems, movieItems, topRatedItems, recentItems] = await Promise.all([
+    fetchAnimeRowItems('trending', 24),
+    fetchAnimeRowItems('movies', 20),
+    fetchAnimeRowItems('top-rated', 24),
+    fetchAnimeRowItems('recent', 24)
+  ]);
+
+  const heroCandidates = trendingItems.filter(item => item.backdrop);
+  const heroItems = heroCandidates.length ? heroCandidates.slice(0, 5) : trendingItems.slice(0, 5);
   const fallback = byType('anime');
+
   return `${hero(heroItems.length ? heroItems : fallback.slice(0, 4))}
     ${top10Section('Top 10 Anime', {
       day: trendingItems.length ? trendingItems.slice(0, 10) : fallback.slice(0, 10),

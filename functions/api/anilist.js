@@ -39,13 +39,29 @@ export async function onRequest(context) {
     });
   }
 
+  // Check Cloudflare edge cache for successful queries
+  const queryStr = JSON.stringify({ q: payload.query, v: payload.variables || {} });
+  let hash = 0;
+  for (let i = 0; i < queryStr.length; i++) {
+    hash = ((hash << 5) - hash) + queryStr.charCodeAt(i);
+    hash |= 0;
+  }
+  const cacheKeyUrl = `https://piraty.in/api/anilist-cache/${Math.abs(hash)}`;
+  const cacheKey = new Request(cacheKeyUrl, { method: 'GET' });
+  const cache = caches.default;
+  let response = await cache.match(cacheKey);
+
+  if (response) {
+    return response;
+  }
+
   try {
     const upstream = await fetch('https://graphql.anilist.co', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
-        'User-Agent': 'PiraTY/1.0',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
       },
       body: JSON.stringify({
         query: payload.query,
@@ -58,10 +74,22 @@ export async function onRequest(context) {
     headers.set('Content-Type', 'application/json; charset=utf-8');
     headers.set('Access-Control-Allow-Origin', '*');
 
-    return new Response(data, {
+    if (upstream.status === 200) {
+      headers.set('Cache-Control', 'public, max-age=1800, s-maxage=1800');
+    } else {
+      headers.set('Cache-Control', 'no-cache');
+    }
+
+    response = new Response(data, {
       status: upstream.status,
       headers,
     });
+
+    if (upstream.status === 200) {
+      context.waitUntil(cache.put(cacheKey, response.clone()));
+    }
+
+    return response;
   } catch (err) {
     return new Response(JSON.stringify({ error: 'AniList request failed', details: String(err) }), {
       status: 502,
