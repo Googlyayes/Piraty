@@ -7263,8 +7263,8 @@ async function fetchAndPlayApiStreams(item) {
   const type = isMovie ? 'movie' : 'series';
   const tmdbId = encodeURIComponent(String(item.tmdbId));
   const endpoint = type === 'movie'
-    ? `https://tmdb-api-esip.onrender.com//api/streams/movie/${tmdbId}`
-    : `https://tmdb-api-esip.onrender.com//api/streams/series/${tmdbId}?season=${encodeURIComponent(item.selectedSeason || item.season || 1)}&episode=${encodeURIComponent(item.selectedEpisode || item.episode || 1)}`;
+    ? `https://tmdb-api-esip.onrender.com/api/streams/movie/${tmdbId}`
+    : `https://tmdb-api-esip.onrender.com/api/streams/series/${tmdbId}?season=${encodeURIComponent(item.selectedSeason || item.season || 1)}&episode=${encodeURIComponent(item.selectedEpisode || item.episode || 1)}`;
 
   showDirectPlayerStatus('Looking for available streams...');
   const response = await fetch(endpoint, { headers: { Accept: 'application/json' } });
