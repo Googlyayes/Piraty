@@ -49,6 +49,16 @@ async function openPiraTYMediaDownload(item = null, season = 1, episode = 1) {
 window.openPiraTYMediaDownload = openPiraTYMediaDownload;
 
 document.addEventListener("click", (event) => {
+  const directBtn = event.target.closest("[data-direct-play]");
+  if (directBtn) {
+    event.preventDefault();
+    event.stopPropagation();
+    if (typeof openDirectPlayerModalForItem === "function") {
+      openDirectPlayerModalForItem(directBtn.dataset.directPlay);
+    }
+    return;
+  }
+
   const btn = event.target.closest("[data-media-download]");
   if (!btn) return;
   event.preventDefault();
@@ -915,6 +925,7 @@ function normalizeTMDBItem(item, forcedMediaType = null) {
 // ============================================================
 
 const icons = window.icons = {
+  directPlay: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><polygon points="10 8 16 11 10 14 10 8" fill="currentColor"/><path d="M8 21h8M12 17v4"/></svg>',
   home: '<svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M3 10.8 12 3l9 7.8"/><path d="M5 10v10h5v-6h4v6h5V10"/></svg>',
   search: '<svg viewBox="0 0 24 24" fill="none" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>',
   browse: '<svg viewBox="0 0 24 24" fill="none" stroke-width="2"><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><rect x="14" y="14" width="6" height="6" rx="1"/></svg>',
@@ -1341,6 +1352,7 @@ function detailPage() {
       <p>${description}</p>
       <div class="hero-buttons">
         <button class="btn primary" data-play="${item.id}">${icons.play} Play</button>
+        <button class="btn" data-direct-play="${item.id}">${icons.directPlay || icons.play} Direct Player</button>
         <button class="btn" data-media-download>${icons.download} Download</button>
         <button class="btn" data-add-watchlist="${item.id}">${icons.plus} Add</button>
     </div>
@@ -5580,6 +5592,7 @@ function detailPage() {
       <p id="detailDescription">${escapeHtml(description)}</p>
       <div class="hero-buttons">
         <button class="btn primary" data-play="${item.id}">${icons.play} Play</button>
+        <button class="btn" data-direct-play="${item.id}">${icons.directPlay || icons.play} Direct Player</button>
         <button class="btn" data-media-download>${icons.download} Download</button>
         <button class="btn" data-add-watchlist="${item.id}">${icons.plus} Add</button>
       </div>
@@ -6483,6 +6496,15 @@ function initCards(scope = document) {
     };
   });
 
+  scope.querySelectorAll('[data-direct-play]').forEach(btn => {
+    btn.onclick = e => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      openDirectPlayerModalForItem(btn.dataset.directPlay);
+    };
+  });
+
   scope.querySelectorAll('[data-detail]').forEach(link => {
     link.onclick = e => {
       e.preventDefault();
@@ -6973,3 +6995,373 @@ function initAuthModal() {
     });
   }
 }
+
+
+/* ==========================================================
+   MINIMALIST HTML5 / HLS DIRECT STREAM PLAYER MODAL
+   ========================================================== */
+
+let directPlayerInstance = null;
+let directPlayerHls = null;
+let directPlayerModalEl = null;
+let directPlayerAssetsPromise = null;
+
+const SAMPLE_DEMO_STREAM = 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4';
+const SAMPLE_HLS_STREAM = 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8';
+
+function ensureDirectPlayerAssets() {
+  if (window.Plyr && window.Hls) return Promise.resolve();
+  if (directPlayerAssetsPromise) return directPlayerAssetsPromise;
+
+  directPlayerAssetsPromise = Promise.all([
+    new Promise((resolve) => {
+      if (document.querySelector('link[href*="plyr.css"]')) return resolve();
+      const link = document.createElement('link');
+      link.rel = 'stylesheet';
+      link.href = 'https://cdn.jsdelivr.net/npm/plyr@3.7.8/dist/plyr.css';
+      link.onload = resolve;
+      link.onerror = () => resolve();
+      document.head.appendChild(link);
+    }),
+    new Promise((resolve) => {
+      if (window.Hls) return resolve();
+      const script = document.createElement('script');
+      script.src = 'https://cdn.jsdelivr.net/npm/hls.js@1.5.8/dist/hls.min.js';
+      script.onload = resolve;
+      script.onerror = () => resolve();
+      document.head.appendChild(script);
+    }),
+    new Promise((resolve) => {
+      if (window.Plyr) return resolve();
+      const script = document.createElement('script');
+      script.src = 'https://cdn.jsdelivr.net/npm/plyr@3.7.8/dist/plyr.polyfilled.min.js';
+      script.onload = resolve;
+      script.onerror = () => resolve();
+      document.head.appendChild(script);
+    })
+  ]);
+
+  return directPlayerAssetsPromise;
+}
+
+function createDirectPlayerModal() {
+  if (document.getElementById('directPlayerModal')) {
+    directPlayerModalEl = document.getElementById('directPlayerModal');
+    return directPlayerModalEl;
+  }
+
+  const overlay = document.createElement('div');
+  overlay.id = 'directPlayerModal';
+  overlay.className = 'direct-player-overlay';
+  overlay.setAttribute('role', 'dialog');
+  overlay.setAttribute('aria-modal', 'true');
+  overlay.setAttribute('aria-label', 'Direct Stream Player');
+
+  overlay.innerHTML = `
+    <div class="direct-player-modal">
+      <div class="direct-player-header">
+        <div class="direct-player-title-wrap">
+          <div class="direct-player-badge">HTML5 / HLS Direct Stream</div>
+          <h2 class="direct-player-title" id="directPlayerTitle">Direct Player</h2>
+        </div>
+        <button class="direct-player-close" id="closeDirectPlayerBtn" aria-label="Close player" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <div class="direct-player-source-bar">
+        <div class="direct-player-input-wrap">
+          <span class="direct-player-input-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+          </span>
+          <input type="url" id="directStreamUrlInput" class="direct-player-input" placeholder="Paste direct stream URL (.mp4, .webm, .m3u8)..." autocomplete="off" spellcheck="false">
+        </div>
+        <div class="direct-player-actions">
+          <button type="button" class="btn primary direct-player-load-btn" id="directStreamLoadBtn">
+            <svg viewBox="0 0 24 24" fill="currentColor" style="width:14px;height:14px"><path d="M8 5v14l11-7Z"/></svg> Play Stream
+          </button>
+          <button type="button" class="btn direct-player-demo-btn" id="directStreamDemoBtn" title="Load sample demo stream to test player">
+            Sample
+          </button>
+        </div>
+      </div>
+
+      <div class="direct-player-stage">
+        <div class="direct-video-wrapper">
+          <video id="piratyDirectVideo" class="direct-video-element" playsinline controls preload="metadata"></video>
+        </div>
+        <div class="direct-player-status" id="directPlayerStatus" style="display:none;"></div>
+      </div>
+
+      <div class="direct-player-footer">
+        <div class="direct-player-hint">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="hint-icon"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+          <span>Supports MP4, WebM, and HLS (.m3u8) streams for your authorized media.</span>
+        </div>
+        <div class="direct-player-shortcuts">
+          <span class="key-tag">Space</span> Play/Pause
+          <span class="key-tag">F</span> Fullscreen
+          <span class="key-tag">M</span> Mute
+          <span class="key-tag">Esc</span> Exit
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(overlay);
+  directPlayerModalEl = overlay;
+
+  overlay.querySelector('#closeDirectPlayerBtn')?.addEventListener('click', closeDirectPlayer);
+
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) closeDirectPlayer();
+  });
+
+  const inputEl = overlay.querySelector('#directStreamUrlInput');
+  const loadBtn = overlay.querySelector('#directStreamLoadBtn');
+  const demoBtn = overlay.querySelector('#directStreamDemoBtn');
+
+  loadBtn?.addEventListener('click', () => {
+    loadDirectStream(inputEl?.value || '');
+  });
+
+  inputEl?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      loadDirectStream(inputEl.value || '');
+    }
+  });
+
+  demoBtn?.addEventListener('click', () => {
+    const isBigBuck = inputEl?.value === SAMPLE_DEMO_STREAM;
+    const targetUrl = isBigBuck ? SAMPLE_HLS_STREAM : SAMPLE_DEMO_STREAM;
+    if (inputEl) inputEl.value = targetUrl;
+    loadDirectStream(targetUrl);
+  });
+
+  return directPlayerModalEl;
+}
+
+function openDirectPlayer({ title = 'Direct Stream', poster = '', url = '', item = null } = {}) {
+  const modal = createDirectPlayerModal();
+  modal._currentItem = item;
+
+  const titleEl = modal.querySelector('#directPlayerTitle');
+  if (titleEl) titleEl.textContent = title || 'Direct Stream';
+
+  const inputEl = modal.querySelector('#directStreamUrlInput');
+  const videoEl = modal.querySelector('#piratyDirectVideo');
+  if (poster && videoEl) videoEl.setAttribute('poster', poster);
+
+  const initialUrl = url || (() => {
+    const key = item ? (item.tmdbId || item.id) : null;
+    return (key && localStorage.getItem(`piraty_direct_url_${key}`))
+      || localStorage.getItem('piraty_last_direct_url')
+      || '';
+  })();
+
+  if (inputEl) inputEl.value = initialUrl;
+
+  modal.classList.add('active');
+  document.body.style.overflow = 'hidden';
+
+  if (initialUrl) {
+    loadDirectStream(initialUrl, poster);
+  } else {
+    inputEl?.focus();
+  }
+}
+
+function openDirectPlayerModalForItem(itemId) {
+  let item = itemId ? findItem(itemId) : null;
+  if (!item) {
+    try {
+      item = JSON.parse(localStorage.getItem(SELECTED_KEY) || 'null');
+    } catch (e) {
+      item = null;
+    }
+  }
+
+  const title = item ? (item.title || item.name || 'Direct Stream') : 'Direct Stream';
+  const poster = item?.poster || item?.backdrop || '';
+  const itemKey = item ? (item.tmdbId || item.id || '') : '';
+  const savedUrl = (itemKey && localStorage.getItem(`piraty_direct_url_${itemKey}`))
+    || localStorage.getItem('piraty_last_direct_url')
+    || '';
+
+  openDirectPlayer({
+    title,
+    poster,
+    url: savedUrl,
+    item
+  });
+}
+
+async function loadDirectStream(rawUrl, poster = '') {
+  const url = String(rawUrl || '').trim();
+  const videoEl = document.getElementById('piratyDirectVideo');
+  const statusEl = document.getElementById('directPlayerStatus');
+
+  if (!videoEl) return;
+
+  if (!url) {
+    if (statusEl) {
+      statusEl.textContent = 'Please enter a valid stream URL (.mp4, .webm, or .m3u8).';
+      statusEl.style.display = 'flex';
+    }
+    return;
+  }
+
+  try {
+    localStorage.setItem('piraty_last_direct_url', url);
+    const item = directPlayerModalEl?._currentItem;
+    if (item?.tmdbId || item?.id) {
+      localStorage.setItem(`piraty_direct_url_${item.tmdbId || item.id}`, url);
+    }
+  } catch (e) {}
+
+  if (statusEl) {
+    statusEl.innerHTML = '<span class="direct-spinner"></span> Connecting stream...';
+    statusEl.style.display = 'flex';
+  }
+
+  if (directPlayerHls) {
+    directPlayerHls.destroy();
+    directPlayerHls = null;
+  }
+
+  await ensureDirectPlayerAssets();
+
+  const isHls = /\.m3u8(\?|$)/i.test(url) || url.includes('/hls/');
+
+  const handleCanPlay = () => {
+    if (statusEl) statusEl.style.display = 'none';
+    videoEl.play().catch(e => {
+      console.log('Direct player autoplay deferred:', e);
+    });
+  };
+
+  const handleError = () => {
+    if (statusEl) {
+      statusEl.innerHTML = '⚠️ <strong>Playback Error</strong>: Unable to load stream. Please ensure the URL is valid, accessible, and has CORS enabled.';
+      statusEl.style.display = 'flex';
+    }
+  };
+
+  videoEl.oncanplay = handleCanPlay;
+  videoEl.onerror = handleError;
+
+  if (isHls) {
+    if (window.Hls && window.Hls.isSupported()) {
+      directPlayerHls = new window.Hls({
+        enableWorker: true,
+        lowLatencyMode: true
+      });
+      directPlayerHls.loadSource(url);
+      directPlayerHls.attachMedia(videoEl);
+      directPlayerHls.on(window.Hls.Events.MANIFEST_PARSED, () => {
+        if (statusEl) statusEl.style.display = 'none';
+        videoEl.play().catch(() => {});
+      });
+      directPlayerHls.on(window.Hls.Events.ERROR, (event, data) => {
+        if (data.fatal) {
+          switch (data.type) {
+            case window.Hls.ErrorTypes.NETWORK_ERROR:
+              console.warn('HLS Network Error, attempting recovery...');
+              directPlayerHls.startLoad();
+              break;
+            case window.Hls.ErrorTypes.MEDIA_ERROR:
+              console.warn('HLS Media Error, attempting recovery...');
+              directPlayerHls.recoverMediaError();
+              break;
+            default:
+              handleError();
+              directPlayerHls.destroy();
+              break;
+          }
+        }
+      });
+    } else if (videoEl.canPlayType('application/vnd.apple.mpegurl')) {
+      videoEl.src = url;
+      videoEl.load();
+    } else {
+      if (statusEl) {
+        statusEl.textContent = 'HLS (.m3u8) playback is not supported on this browser.';
+        statusEl.style.display = 'flex';
+      }
+      return;
+    }
+  } else {
+    videoEl.src = url;
+    videoEl.load();
+  }
+
+  if (window.Plyr && !directPlayerInstance) {
+    try {
+      directPlayerInstance = new window.Plyr(videoEl, {
+        controls: [
+          'play-large',
+          'play',
+          'progress',
+          'current-time',
+          'duration',
+          'mute',
+          'volume',
+          'captions',
+          'settings',
+          'pip',
+          'airplay',
+          'fullscreen'
+        ],
+        settings: ['quality', 'speed'],
+        speed: { selected: 1, options: [0.5, 0.75, 1, 1.25, 1.5, 2] },
+        tooltips: { controls: true, seek: true },
+        keyboard: { focused: true, global: false }
+      });
+    } catch (err) {
+      console.warn('Plyr initialization fallback to native:', err);
+    }
+  }
+}
+
+function closeDirectPlayer() {
+  if (!directPlayerModalEl) return;
+  directPlayerModalEl.classList.remove('active');
+  document.body.style.overflow = '';
+
+  if (directPlayerInstance) {
+    try {
+      directPlayerInstance.destroy();
+    } catch (e) {}
+    directPlayerInstance = null;
+  }
+
+  if (directPlayerHls) {
+    directPlayerHls.destroy();
+    directPlayerHls = null;
+  }
+
+  const videoEl = document.getElementById('piratyDirectVideo');
+  if (videoEl) {
+    videoEl.pause();
+    videoEl.removeAttribute('src');
+    videoEl.load();
+  }
+
+  const statusEl = document.getElementById('directPlayerStatus');
+  if (statusEl) {
+    statusEl.textContent = '';
+    statusEl.style.display = 'none';
+  }
+}
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && directPlayerModalEl && directPlayerModalEl.classList.contains('active')) {
+    closeDirectPlayer();
+  }
+});
+
+window.openDirectPlayer = openDirectPlayer;
+window.closeDirectPlayer = closeDirectPlayer;
+window.loadDirectStream = loadDirectStream;
+window.openDirectPlayerModalForItem = openDirectPlayerModalForItem;
