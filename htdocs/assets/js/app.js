@@ -1352,7 +1352,7 @@ function detailPage() {
       <p>${description}</p>
       <div class="hero-buttons">
         <button class="btn primary" data-play="${item.id}">${icons.play} Play</button>
-        <button class="btn" data-direct-play="${item.id}">${icons.directPlay || icons.play} Direct Player</button>
+        <button class="btn btn-direct-player" data-direct-play="${item.id}">${icons.directPlay || icons.play} Direct Player</button>
         <button class="btn" data-media-download>${icons.download} Download</button>
         <button class="btn" data-add-watchlist="${item.id}">${icons.plus} Add</button>
     </div>
@@ -5592,7 +5592,7 @@ function detailPage() {
       <p id="detailDescription">${escapeHtml(description)}</p>
       <div class="hero-buttons">
         <button class="btn primary" data-play="${item.id}">${icons.play} Play</button>
-        <button class="btn" data-direct-play="${item.id}">${icons.directPlay || icons.play} Direct Player</button>
+        <button class="btn btn-direct-player" data-direct-play="${item.id}">${icons.directPlay || icons.play} Direct Player</button>
         <button class="btn" data-media-download>${icons.download} Download</button>
         <button class="btn" data-add-watchlist="${item.id}">${icons.plus} Add</button>
       </div>
@@ -6492,7 +6492,7 @@ function initCards(scope = document) {
       e.preventDefault();
       e.stopPropagation();
 
-      playItem(btn.dataset.play);
+      openDirectPlayerModalForItem(btn.dataset.play);
     };
   });
 
@@ -7076,6 +7076,7 @@ function createDirectPlayerModal() {
           </span>
           <input type="url" id="directStreamUrlInput" class="direct-player-input" placeholder="Paste direct stream URL (.mp4, .webm, .m3u8)..." autocomplete="off" spellcheck="false">
         </div>
+        <select id="directPlayerStreamSelect" class="direct-player-stream-select" aria-label="Choose a stream source" hidden></select>
         <div class="direct-player-actions">
           <button type="button" class="btn primary direct-player-load-btn" id="directStreamLoadBtn">
             <svg viewBox="0 0 24 24" fill="currentColor" style="width:14px;height:14px"><path d="M8 5v14l11-7Z"/></svg> Play Stream
@@ -7090,7 +7091,7 @@ function createDirectPlayerModal() {
         <div class="direct-video-wrapper">
           <video id="piratyDirectVideo" class="direct-video-element" playsinline controls preload="metadata"></video>
         </div>
-        <div class="direct-player-status" id="directPlayerStatus" style="display:none;"></div>
+        <div class="direct-player-status" id="directPlayerStatus" role="status" aria-live="polite" style="display:none;"></div>
       </div>
 
       <div class="direct-player-footer">
@@ -7120,6 +7121,7 @@ function createDirectPlayerModal() {
   const inputEl = overlay.querySelector('#directStreamUrlInput');
   const loadBtn = overlay.querySelector('#directStreamLoadBtn');
   const demoBtn = overlay.querySelector('#directStreamDemoBtn');
+  const streamSelect = overlay.querySelector('#directPlayerStreamSelect');
 
   loadBtn?.addEventListener('click', () => {
     loadDirectStream(inputEl?.value || '');
@@ -7139,10 +7141,17 @@ function createDirectPlayerModal() {
     loadDirectStream(targetUrl);
   });
 
+  streamSelect?.addEventListener('change', () => {
+    const selected = streamSelect.selectedOptions[0];
+    if (!selected?.value) return;
+    if (inputEl) inputEl.value = selected.value;
+    loadDirectStream(selected.value);
+  });
+
   return directPlayerModalEl;
 }
 
-function openDirectPlayer({ title = 'Direct Stream', poster = '', url = '', item = null } = {}) {
+function openDirectPlayer({ title = 'Direct Stream', poster = '', url = '', item = null, restoreSavedUrl = true } = {}) {
   const modal = createDirectPlayerModal();
   modal._currentItem = item;
 
@@ -7151,14 +7160,19 @@ function openDirectPlayer({ title = 'Direct Stream', poster = '', url = '', item
 
   const inputEl = modal.querySelector('#directStreamUrlInput');
   const videoEl = modal.querySelector('#piratyDirectVideo');
+  const streamSelect = modal.querySelector('#directPlayerStreamSelect');
   if (poster && videoEl) videoEl.setAttribute('poster', poster);
+  if (streamSelect) {
+    streamSelect.replaceChildren();
+    streamSelect.hidden = true;
+  }
 
-  const initialUrl = url || (() => {
+  const initialUrl = url || (restoreSavedUrl ? (() => {
     const key = item ? (item.tmdbId || item.id) : null;
     return (key && localStorage.getItem(`piraty_direct_url_${key}`))
       || localStorage.getItem('piraty_last_direct_url')
       || '';
-  })();
+  })() : '');
 
   if (inputEl) inputEl.value = initialUrl;
 
@@ -7172,29 +7186,128 @@ function openDirectPlayer({ title = 'Direct Stream', poster = '', url = '', item
   }
 }
 
-function openDirectPlayerModalForItem(itemId) {
+async function openDirectPlayerModalForItem(itemId) {
   let item = itemId ? findItem(itemId) : null;
-  if (!item) {
+  try {
+    const selectedItem = JSON.parse(localStorage.getItem(SELECTED_KEY) || 'null');
+    if (selectedItem && (!item || String(selectedItem.id) === String(item.id))) {
+      item = { ...item, ...selectedItem };
+    }
+  } catch (error) {
+    console.warn('Could not read selected media before fetching streams:', error);
+  }
+  if (item) item = rememberItem(item);
+
+  if (item && !item.tmdbId && (item.anilistId || item.malId) && typeof resolveAnimePlayableItem === 'function') {
     try {
-      item = JSON.parse(localStorage.getItem(SELECTED_KEY) || 'null');
-    } catch (e) {
-      item = null;
+      item = await resolveAnimePlayableItem(item);
+    } catch (error) {
+      console.error('Could not resolve anime TMDB ID:', error);
     }
   }
 
   const title = item ? (item.title || item.name || 'Direct Stream') : 'Direct Stream';
   const poster = item?.poster || item?.backdrop || '';
-  const itemKey = item ? (item.tmdbId || item.id || '') : '';
-  const savedUrl = (itemKey && localStorage.getItem(`piraty_direct_url_${itemKey}`))
-    || localStorage.getItem('piraty_last_direct_url')
-    || '';
 
   openDirectPlayer({
     title,
     poster,
-    url: savedUrl,
-    item
+    item,
+    restoreSavedUrl: false
   });
+
+  fetchAndPlayApiStreams(item).catch(error => {
+    console.error('Stream API request failed:', error);
+    showDirectPlayerStatus(error.message || 'Could not retrieve streams. You can enter a direct stream URL above.');
+  });
+}
+
+function showDirectPlayerStatus(message) {
+  const statusEl = document.getElementById('directPlayerStatus');
+  if (!statusEl) return;
+  statusEl.textContent = message;
+  statusEl.style.display = 'flex';
+}
+
+function getDirectStreamUrl(stream) {
+  const candidate = typeof stream === 'string'
+    ? stream
+    : stream && typeof stream === 'object'
+      ? stream.url || stream.streamUrl || stream.stream_url || stream.src || stream.file || stream.link
+      : '';
+
+  if (typeof candidate !== 'string') return '';
+  try {
+    const url = new URL(candidate.trim());
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url.href : '';
+  } catch (error) {
+    return '';
+  }
+}
+
+function getDirectStreamLabel(stream, index) {
+  if (typeof stream === 'object' && stream) {
+    const label = stream.quality || stream.label || stream.name || stream.provider || stream.server;
+    if (typeof label === 'string' && label.trim()) return label.trim();
+  }
+  return `Source ${index + 1}`;
+}
+
+async function fetchAndPlayApiStreams(item) {
+  if (!item?.tmdbId || !/^\d+$/.test(String(item.tmdbId))) {
+    throw new Error('This title has no TMDB ID. Enter an authorized direct stream URL above.');
+  }
+
+  const rawType = String(item.mediaType || item.type || item.category || '').toLowerCase();
+  const isMovie = rawType === 'movie' || rawType === 'film';
+  const type = isMovie ? 'movie' : 'series';
+  const tmdbId = encodeURIComponent(String(item.tmdbId));
+  const endpoint = type === 'movie'
+    ? `https://tmdb-api-psi.vercel.app/api/streams/movie/${tmdbId}`
+    : `https://tmdb-api-psi.vercel.app/api/streams/series/${tmdbId}?season=${encodeURIComponent(item.selectedSeason || item.season || 1)}&episode=${encodeURIComponent(item.selectedEpisode || item.episode || 1)}`;
+
+  showDirectPlayerStatus('Looking for available streams...');
+  const response = await fetch(endpoint, { headers: { Accept: 'application/json' } });
+  let data;
+  try {
+    data = await response.json();
+  } catch (error) {
+    throw new Error('The stream API returned an invalid response.');
+  }
+  if (!response.ok) {
+    throw new Error(data?.error || `Stream API request failed (${response.status}).`);
+  }
+  if (data?.success === false) {
+    throw new Error(data.error || data.message || 'The stream API could not find sources.');
+  }
+  if (!Array.isArray(data?.streams)) {
+    throw new Error('The stream API response is missing its streams list.');
+  }
+
+  const streams = data.streams
+    .map((stream, index) => ({ url: getDirectStreamUrl(stream), label: getDirectStreamLabel(stream, index) }))
+    .filter(stream => stream.url);
+  if (!streams.length) {
+    throw new Error('No playable streams were returned for this title and episode.');
+  }
+
+  const select = document.getElementById('directPlayerStreamSelect');
+  if (select) {
+    select.replaceChildren();
+    streams.forEach((stream, index) => {
+      const option = document.createElement('option');
+      option.value = stream.url;
+      option.textContent = stream.label;
+      select.appendChild(option);
+    });
+    select.hidden = streams.length < 2;
+    select.value = streams[0].url;
+  }
+
+  const input = document.getElementById('directStreamUrlInput');
+  if (input) input.value = streams[0].url;
+  showDirectPlayerStatus(`${streams.length} stream${streams.length === 1 ? '' : 's'} found. Loading ${streams[0].label}...`);
+  await loadDirectStream(streams[0].url, item.poster || item.backdrop || '');
 }
 
 async function loadDirectStream(rawUrl, poster = '') {

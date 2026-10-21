@@ -1155,7 +1155,7 @@ body::before {
   position: fixed;
   inset: 0;
   z-index: -3;
-  background: url('../images/background-still.svg?v=2026.10.16.003') center/cover no-repeat;
+  background: url('../images/background-still.svg?v=2026.10.21.004') center/cover no-repeat;
   transform: translate3d(0, 0, 0);
   pointer-events: none;
 }
@@ -6184,6 +6184,22 @@ html[data-theme="light"] .studio-card:hover .studio-logo {
   box-shadow: 0 0 0 3px rgba(56, 240, 141, 0.15);
 }
 
+.direct-player-stream-select {
+  min-width: 150px;
+  height: 42px;
+  padding: 0 30px 0 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+  font: inherit;
+}
+
+.direct-player-stream-select option {
+  background: #0d0f14;
+  color: #fff;
+}
+
 .direct-player-actions {
   display: flex;
   gap: 8px;
@@ -6337,4 +6353,41 @@ html[data-theme="light"] .studio-card:hover .studio-logo {
   .direct-player-shortcuts {
     display: none;
   }
+}
+
+/* ==========================================================
+   DIRECT PLAYER BUTTON STYLES (DETAILS PAGE)
+   ========================================================== */
+.btn.btn-direct-player,
+.btn[data-direct-play] {
+  background: rgba(56, 240, 141, 0.14) !important;
+  border: 1px solid rgba(56, 240, 141, 0.45) !important;
+  color: #38f08d !important;
+  font-weight: 500 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+}
+
+.btn.btn-direct-player svg,
+.btn[data-direct-play] svg {
+  width: 16px !important;
+  height: 16px !important;
+  fill: none !important;
+  stroke: currentColor !important;
+}
+
+.btn.btn-direct-player svg polygon,
+.btn[data-direct-play] svg polygon {
+  fill: currentColor !important;
+  stroke: none !important;
+}
+
+.btn.btn-direct-player:hover,
+.btn[data-direct-play]:hover {
+  background: rgba(56, 240, 141, 0.25) !important;
+  border-color: rgba(56, 240, 141, 0.75) !important;
+  color: #ffffff !important;
+  box-shadow: 0 0 22px rgba(56, 240, 141, 0.35) !important;
+  transform: translateY(-1px) !important;
 }
