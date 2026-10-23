@@ -6492,7 +6492,7 @@ function initCards(scope = document) {
       e.preventDefault();
       e.stopPropagation();
 
-      openDirectPlayerModalForItem(btn.dataset.play);
+      playItem(btn.dataset.play);
     };
   });
 
