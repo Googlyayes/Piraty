@@ -35,7 +35,7 @@ const SERVER_CONFIGS = {
     },
     {
       name: "vidsrc",
-      buildUrl: ({ id }) => `https://vidsrc-embed.ru/embed/movie/${id}`
+      buildUrl: ({ id }) => `https://vidsrc.mov/embed/movie/${id}`
     },
     {
       name: "MULTI SERVER 3",
@@ -155,7 +155,7 @@ const SERVER_CONFIGS = {
     },
     {
       name: "vidsrc",
-      buildUrl: ({ id, season, episode }) => `https://vidsrc-embed.ru/embed/tv/${id}/${season}/${episode}`
+      buildUrl: ({ id, season, episode }) => `https://vidsrc.mov/embed/tv/${id}/${season}/${episode}`
     },
     {
       name: "MULTI SERVER 3",
@@ -278,7 +278,7 @@ const SERVER_CONFIGS = {
     {
       name: "vidsrc",
       buildUrl: ({ id, season, episode }) =>
-        `https://vidsrc-embed.ru/embed/tv/${id}/${season}/${episode}`
+        `https://vidsrc.mov/embed/tv/${id}/${season}/${episode}`
     },
     
     {
