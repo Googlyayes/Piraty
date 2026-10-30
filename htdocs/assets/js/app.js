@@ -4047,34 +4047,37 @@ function aniListFetch(query, variables = {}) {
   if (ANILIST_REQUEST_CACHE.has(cacheKey)) return ANILIST_REQUEST_CACHE.get(cacheKey);
 
   const request = (async () => {
-    let lastError = null;
+    const requestBody = JSON.stringify({ query, variables });
+    const endpoints = [
+      { url: ANILIST_CONFIG.proxyUrl, label: 'site proxy' },
+      { url: 'https://graphql.anilist.co', label: 'direct API' }
+    ];
+    const errors = [];
 
-    try {
-      const response = await fetch(ANILIST_CONFIG.proxyUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify({ query, variables })
-      });
+    for (const endpoint of endpoints) {
+      try {
+        const response = await fetch(endpoint.url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+          body: requestBody
+        });
+        const payload = await response.json();
 
-      if (!response.ok) {
-        lastError = new Error(`AniList proxy error: ${response.status} ${response.statusText}`);
-        return null;
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${payload?.errors?.map(error => error?.message || 'AniList error').join('; ') || response.statusText}`);
+        }
+        if (Array.isArray(payload?.errors) && payload.errors.length) {
+          throw new Error(payload.errors.map(error => error?.message || 'AniList error').join('; '));
+        }
+
+        return payload;
+      } catch (error) {
+        errors.push(`${endpoint.label}: ${error.message || error}`);
+        console.warn(`AniList ${endpoint.label} request failed:`, error);
       }
-
-      const payload = await response.json();
-      if (payload?.errors && Array.isArray(payload.errors) && payload.errors.length) {
-        lastError = new Error(payload.errors.map(error => error?.message || 'AniList error').join('; '));
-        return null;
-      }
-
-      return payload;
-    } catch (error) {
-      lastError = error;
     }
 
-    if (lastError) {
-      console.warn('AniList fetch failed:', lastError);
-    }
+    console.error('AniList request failed through both endpoints:', errors.join(' | '));
     return null;
   })();
 
