@@ -7082,7 +7082,10 @@ function createDirectPlayerModal() {
         <select id="directPlayerStreamSelect" class="direct-player-stream-select" aria-label="Choose a stream source" hidden></select>
         <div class="direct-player-actions">
           <button type="button" class="btn primary direct-player-load-btn" id="directStreamLoadBtn">
-            <svg viewBox="0 0 24 24" fill="currentColor" style="width:14px;height:14px"><path d="M8 5v14l11-7Z"/></svg> Play Stream
+            <svg viewBox="0 0 24 24" fill="currentColor" style="width:14px;height:14px"><path d="M8 5v14l11-7Z"/></svg> Play
+          </button>
+          <button type="button" class="btn direct-player-cc-btn" id="directStreamCcBtn" title="Add or toggle custom subtitle URL">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M7 15h2a2 2 0 0 0 2-2v-2a2 2 0 0 0-2-2H7v6Zm8 0h2a2 2 0 0 0 2-2v-2a2 2 0 0 0-2-2h-2v6Z"/></svg> CC
           </button>
           <button type="button" class="btn direct-player-demo-btn" id="directStreamDemoBtn" title="Load sample demo stream to test player">
             Sample
@@ -7090,17 +7093,45 @@ function createDirectPlayerModal() {
         </div>
       </div>
 
+      <!-- Subtitle URL drawer -->
+      <div class="direct-player-subtitles-bar" id="directPlayerSubtitlesBar" style="display:none;">
+        <div class="direct-player-input-wrap">
+          <span class="direct-player-input-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          </span>
+          <input type="url" id="directStreamSubtitleUrlInput" class="direct-player-input" placeholder="Enter WebVTT (.vtt) Subtitle URL..." autocomplete="off" spellcheck="false">
+        </div>
+        <button type="button" class="btn primary" id="directStreamApplySubtitleBtn">Add Subtitle</button>
+      </div>
+
       <div class="direct-player-stage">
         <div class="direct-video-wrapper">
-          <video id="piratyDirectVideo" class="direct-video-element" playsinline controls preload="metadata"></video>
+          <video id="piratyDirectVideo" class="direct-video-element" playsinline controls crossorigin="anonymous" preload="metadata"></video>
         </div>
         <div class="direct-player-status" id="directPlayerStatus" role="status" aria-live="polite" style="display:none;"></div>
+      </div>
+
+      <!-- Episode & Season Selector Area -->
+      <div class="direct-player-episodes-panel" id="directPlayerEpisodesPanel" style="display:none;">
+        <div class="direct-episodes-header">
+          <div class="direct-episodes-title-wrap">
+            <span class="direct-episodes-heading">Episodes</span>
+            <span class="direct-episodes-badge" id="directPlayerEpCount">0 episodes</span>
+          </div>
+          <div class="direct-season-picker">
+            <label for="directPlayerSeasonSelect">Season:</label>
+            <select id="directPlayerSeasonSelect" class="direct-season-select"></select>
+          </div>
+        </div>
+        <div class="direct-episodes-list" id="directPlayerEpisodesList">
+          <!-- Populated dynamically via TMDB -->
+        </div>
       </div>
 
       <div class="direct-player-footer">
         <div class="direct-player-hint">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="hint-icon"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
-          <span>Supports MP4, WebM, and HLS (.m3u8) streams for your authorized media.</span>
+          <span>Supports MP4, WebM, and HLS (.m3u8) streams with WebVTT captions.</span>
         </div>
         <div class="direct-player-shortcuts">
           <span class="key-tag">Space</span> Play/Pause
@@ -7151,6 +7182,32 @@ function createDirectPlayerModal() {
     loadDirectStream(selected.value);
   });
 
+  const ccBtn = overlay.querySelector('#directStreamCcBtn');
+  const subtitlesBar = overlay.querySelector('#directPlayerSubtitlesBar');
+  const subtitleInput = overlay.querySelector('#directStreamSubtitleUrlInput');
+  const applySubtitleBtn = overlay.querySelector('#directStreamApplySubtitleBtn');
+
+  ccBtn?.addEventListener('click', () => {
+    if (!subtitlesBar) return;
+    const isHidden = subtitlesBar.style.display === 'none';
+    subtitlesBar.style.display = isHidden ? 'flex' : 'none';
+    if (isHidden) subtitleInput?.focus();
+  });
+
+  applySubtitleBtn?.addEventListener('click', () => {
+    const subUrl = subtitleInput?.value?.trim();
+    if (!subUrl) return;
+    addDirectPlayerSubtitleTrack({ file: subUrl, label: 'Custom Subtitles', language: 'en', default: true });
+    subtitlesBar.style.display = 'none';
+  });
+
+  subtitleInput?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      applySubtitleBtn?.click();
+    }
+  });
+
   return directPlayerModalEl;
 }
 
@@ -7189,6 +7246,154 @@ function openDirectPlayer({ title = 'Direct Stream', poster = '', url = '', item
   }
 }
 
+
+/* ==========================================================
+   DIRECT PLAYER SUBTITLE & EPISODE HELPERS
+   ========================================================== */
+
+function addDirectPlayerSubtitleTrack(track) {
+  const videoEl = document.getElementById('piratyDirectVideo');
+  if (!videoEl || !track?.file) return;
+
+  const existing = Array.from(videoEl.querySelectorAll('track')).find(t => t.src === track.file);
+  if (existing) return;
+
+  const trackEl = document.createElement('track');
+  trackEl.kind = 'subtitles';
+  trackEl.label = track.label || track.name || track.language || 'English';
+  trackEl.srclang = track.language || track.lang || 'en';
+  trackEl.src = track.file;
+  if (track.default) trackEl.default = true;
+
+  videoEl.appendChild(trackEl);
+
+  if (directPlayerInstance) {
+    try {
+      directPlayerInstance.restart();
+    } catch (e) {}
+  }
+}
+
+function clearDirectPlayerSubtitles() {
+  const videoEl = document.getElementById('piratyDirectVideo');
+  if (!videoEl) return;
+  videoEl.querySelectorAll('track').forEach(t => t.remove());
+}
+
+async function initDirectPlayerEpisodes(item) {
+  const panel = document.getElementById('directPlayerEpisodesPanel');
+  const seasonSelect = document.getElementById('directPlayerSeasonSelect');
+  const episodesList = document.getElementById('directPlayerEpisodesList');
+  const countBadge = document.getElementById('directPlayerEpCount');
+
+  if (!panel || !seasonSelect || !episodesList) return;
+
+  const rawType = String(item?.mediaType || item?.type || item?.category || '').toLowerCase();
+  const isSeries = rawType === 'tv' || rawType === 'show' || rawType === 'anime' || rawType === 'series';
+
+  if (!isSeries || !item?.tmdbId) {
+    panel.style.display = 'none';
+    return;
+  }
+
+  panel.style.display = 'block';
+  episodesList.innerHTML = '<div class="direct-episodes-loading"><span class="direct-spinner"></span> Loading seasons & episodes...</div>';
+
+  let seasons = [];
+  try {
+    const showData = await tmdbFetch(`/tv/${item.tmdbId}?language=en-US`);
+    seasons = (showData?.seasons || []).filter(s => s && s.season_number > 0);
+  } catch (err) {
+    console.warn('Direct player failed to fetch show seasons:', err);
+  }
+
+  if (!seasons.length) {
+    seasons = [{ season_number: 1, name: 'Season 1', episode_count: 12 }];
+  }
+
+  seasonSelect.replaceChildren();
+  seasons.forEach(s => {
+    const opt = document.createElement('option');
+    opt.value = s.season_number;
+    opt.textContent = s.name || `Season ${s.season_number}`;
+    seasonSelect.appendChild(opt);
+  });
+
+  const activeSeason = Number(item.selectedSeason || item.season || seasons[0]?.season_number || 1);
+  seasonSelect.value = activeSeason;
+
+  async function renderEpisodesForSeason(seasonNum) {
+    episodesList.innerHTML = '<div class="direct-episodes-loading"><span class="direct-spinner"></span> Loading episodes...</div>';
+    let episodes = [];
+    try {
+      const data = await tmdbFetch(`/tv/${item.tmdbId}/season/${seasonNum}?language=en-US`);
+      episodes = data?.episodes || [];
+    } catch (e) {
+      console.warn('Failed to load season episodes:', e);
+    }
+
+    if (!episodes.length) {
+      episodesList.innerHTML = '<div class="direct-episodes-empty">No episodes found for this season.</div>';
+      if (countBadge) countBadge.textContent = '0 episodes';
+      return;
+    }
+
+    if (countBadge) countBadge.textContent = `${episodes.length} episode${episodes.length === 1 ? '' : 's'}`;
+
+    const activeEpNum = Number(item.selectedEpisode || item.episode || 1);
+
+    episodesList.innerHTML = episodes.map(ep => {
+      const epNum = ep.episode_number;
+      const isActive = Number(seasonSelect.value) === activeSeason && epNum === activeEpNum;
+      const thumb = ep.still_path ? `https://image.tmdb.org/t/p/w300${ep.still_path}` : '';
+      const duration = ep.runtime ? `${ep.runtime}m` : '';
+
+      return `
+        <button type="button" class="direct-episode-card ${isActive ? 'active' : ''}" data-direct-ep-season="${seasonNum}" data-direct-ep-number="${epNum}">
+          <div class="direct-ep-thumb-wrap">
+            ${thumb ? `<img src="${thumb}" alt="Episode ${epNum}" class="direct-ep-thumb" loading="lazy">` : `<div class="direct-ep-thumb-fallback">EP ${epNum}</div>`}
+            <span class="direct-ep-badge">E${epNum}</span>
+          </div>
+          <div class="direct-ep-info">
+            <div class="direct-ep-title">${escapeHtml(ep.name || `Episode ${epNum}`)}</div>
+            <div class="direct-ep-meta">${duration ? `<span>${duration}</span>` : ''} ${ep.air_date ? `<span>${ep.air_date.slice(0,4)}</span>` : ''}</div>
+          </div>
+        </button>
+      `;
+    }).join('');
+
+    episodesList.querySelectorAll('.direct-episode-card').forEach(card => {
+      card.addEventListener('click', () => {
+        const s = Number(card.dataset.directEpSeason);
+        const e = Number(card.dataset.directEpNumber);
+
+        episodesList.querySelectorAll('.direct-episode-card').forEach(c => c.classList.remove('active'));
+        card.classList.add('active');
+
+        item.selectedSeason = s;
+        item.selectedEpisode = e;
+
+        const titleEl = document.getElementById('directPlayerTitle');
+        if (titleEl) {
+          titleEl.textContent = `${item.title || item.name || 'Direct Stream'} - S${s} E${e}`;
+        }
+
+        if (typeof fetchAndPlayApiStreams === 'function') {
+          fetchAndPlayApiStreams(item, s, e).catch(err => {
+            console.warn('Stream reload for episode failed:', err);
+          });
+        }
+      });
+    });
+  }
+
+  seasonSelect.onchange = () => {
+    renderEpisodesForSeason(Number(seasonSelect.value));
+  };
+
+  renderEpisodesForSeason(activeSeason);
+}
+
 async function openDirectPlayerModalForItem(itemId) {
   let item = itemId ? findItem(itemId) : null;
   try {
@@ -7218,6 +7423,8 @@ async function openDirectPlayerModalForItem(itemId) {
     item,
     restoreSavedUrl: false
   });
+
+  initDirectPlayerEpisodes(item);
 
   fetchAndPlayApiStreams(item).catch(error => {
     console.error('Stream API request failed:', error);
@@ -7256,10 +7463,13 @@ function getDirectStreamLabel(stream, index) {
   return `Source ${index + 1}`;
 }
 
-async function fetchAndPlayApiStreams(item) {
+async function fetchAndPlayApiStreams(item, customSeason = null, customEpisode = null) {
   if (!item?.tmdbId || !/^\d+$/.test(String(item.tmdbId))) {
     throw new Error('This title has no TMDB ID. Enter an authorized direct stream URL above.');
   }
+
+  const seasonNum = customSeason || item.selectedSeason || item.season || 1;
+  const episodeNum = customEpisode || item.selectedEpisode || item.episode || 1;
 
   const rawType = String(item.mediaType || item.type || item.category || '').toLowerCase();
   const isMovie = rawType === 'movie' || rawType === 'film';
@@ -7267,7 +7477,7 @@ async function fetchAndPlayApiStreams(item) {
   const tmdbId = encodeURIComponent(String(item.tmdbId));
   const endpoint = type === 'movie'
     ? `https://tmdb-api-esip.onrender.com/api/streams/movie/${tmdbId}`
-    : `https://tmdb-api-esip.onrender.com/api/streams/series/${tmdbId}?season=${encodeURIComponent(item.selectedSeason || item.season || 1)}&episode=${encodeURIComponent(item.selectedEpisode || item.episode || 1)}`;
+    : `https://tmdb-api-esip.onrender.com/api/streams/series/${tmdbId}?season=${encodeURIComponent(seasonNum)}&episode=${encodeURIComponent(episodeNum)}`;
 
   showDirectPlayerStatus('Looking for available streams...');
   const response = await fetch(endpoint, { headers: { Accept: 'application/json' } });
@@ -7309,6 +7519,19 @@ async function fetchAndPlayApiStreams(item) {
 
   const input = document.getElementById('directStreamUrlInput');
   if (input) input.value = streams[0].url;
+  clearDirectPlayerSubtitles();
+  const rawSubtitles = data.subtitles || data.captions || data.tracks || [];
+  if (Array.isArray(rawSubtitles)) {
+    rawSubtitles.forEach(sub => {
+      addDirectPlayerSubtitleTrack({
+        file: sub.file || sub.url || sub.src,
+        label: sub.label || sub.name || sub.lang || 'Subtitles',
+        language: sub.language || sub.lang || 'en',
+        default: Boolean(sub.default)
+      });
+    });
+  }
+
   showDirectPlayerStatus(`${streams.length} stream${streams.length === 1 ? '' : 's'} found. Loading ${streams[0].label}...`);
   await loadDirectStream(streams[0].url, item.poster || item.backdrop || '');
 }
@@ -7429,7 +7652,8 @@ async function loadDirectStream(rawUrl, poster = '') {
           'airplay',
           'fullscreen'
         ],
-        settings: ['quality', 'speed'],
+        settings: ['captions', 'quality', 'speed'],
+        captions: { active: true, update: true, language: 'auto' },
         speed: { selected: 1, options: [0.5, 0.75, 1, 1.25, 1.5, 2] },
         tooltips: { controls: true, seek: true },
         keyboard: { focused: true, global: false }

@@ -6391,3 +6391,243 @@ html[data-theme="light"] .studio-card:hover .studio-logo {
   box-shadow: 0 0 22px rgba(56, 240, 141, 0.35) !important;
   transform: translateY(-1px) !important;
 }
+
+
+/* ==========================================================
+   DIRECT PLAYER SUBTITLES & EPISODE SELECTOR STYLES
+   ========================================================== */
+
+.direct-player-cc-btn {
+  height: 42px;
+  padding: 0 14px;
+  font-size: 13px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #f4f4f4;
+  border-radius: 10px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.direct-player-cc-btn:hover {
+  background: rgba(56, 240, 141, 0.18);
+  border-color: rgba(56, 240, 141, 0.45);
+  color: #38f08d;
+}
+
+.direct-player-subtitles-bar {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 24px;
+  background: rgba(18, 24, 32, 0.95);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  animation: directSlideDown 0.22s ease-out;
+}
+
+@keyframes directSlideDown {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.direct-player-subtitles-bar .direct-player-input-wrap {
+  flex: 1;
+}
+
+.direct-player-episodes-panel {
+  padding: 18px 24px 22px;
+  background: rgba(10, 13, 18, 0.98);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.direct-episodes-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.direct-episodes-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.direct-episodes-heading {
+  font-size: 16px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: -0.01em;
+}
+
+.direct-episodes-badge {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.06);
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.direct-season-picker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.direct-season-select {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: #fff;
+  padding: 6px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  outline: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.direct-season-select:hover,
+.direct-season-select:focus {
+  border-color: var(--accent, #38f08d);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.direct-episodes-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+  max-height: 280px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.direct-episodes-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.direct-episodes-list::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 3px;
+}
+
+.direct-episodes-list::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 3px;
+}
+
+.direct-episode-card {
+  display: flex;
+  flex-direction: column;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  overflow: hidden;
+  cursor: pointer;
+  text-align: left;
+  padding: 0;
+  transition: all 0.22s ease;
+  outline: none;
+  color: inherit;
+}
+
+.direct-episode-card:hover {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.2);
+  transform: translateY(-2px);
+}
+
+.direct-episode-card.active {
+  background: rgba(56, 240, 141, 0.10);
+  border-color: var(--accent, #38f08d);
+  box-shadow: 0 0 16px rgba(56, 240, 141, 0.22);
+}
+
+.direct-ep-thumb-wrap {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+}
+
+.direct-ep-thumb {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.direct-ep-thumb-fallback {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.direct-ep-badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(4px);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.direct-episode-card.active .direct-ep-badge {
+  background: var(--accent, #38f08d);
+  color: #050505;
+  border-color: var(--accent, #38f08d);
+}
+
+.direct-ep-info {
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.direct-ep-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.direct-ep-meta {
+  font-size: 11.5px;
+  color: var(--muted);
+  display: flex;
+  gap: 8px;
+}
+
+.direct-episodes-loading,
+.direct-episodes-empty {
+  grid-column: 1 / -1;
+  padding: 24px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 13.5px;
+}
